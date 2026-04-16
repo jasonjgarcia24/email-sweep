@@ -84,12 +84,20 @@ ln -sf "$PWD/scripts/gmail-labels.py" ~/.local/bin/gmail-labels
 chmod +x "$PWD/scripts/gmail-labels.py"
 ```
 
-Then merge `settings.fragment.json` into `~/.claude/settings.json` so Claude Code is allowed to call the Gmail MCP tools and the `gmail-labels` CLI:
+Then merge `settings.fragment.json` into `~/.claude/settings.json` so Claude Code is allowed to call the Gmail MCP tools and the `gmail-labels` CLI. Back up first — the merge rewrites `permissions.allow`:
 
 ```bash
-jq -s '.[0] * .[1]' ~/.claude/settings.json settings.fragment.json \
+cp ~/.claude/settings.json ~/.claude/settings.json.bak
+jq -s '
+  (.[0].permissions.allow // []) as $a
+  | (.[1].permissions.allow // []) as $b
+  | .[0] * .[1]
+  | .permissions.allow = ($a + $b | unique)
+' ~/.claude/settings.json settings.fragment.json \
   > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json
 ```
+
+(The naive `jq '.[0] * .[1]'` form replaces arrays rather than concatenating them, which silently drops any existing `permissions.allow` entries. The form above concatenates and dedupes.)
 
 If you use the slash command's default reference to the skill (`email-sweep:email-sweep`), it resolves fine under manual install too — Claude Code looks up namespaced skills the same way.
 
