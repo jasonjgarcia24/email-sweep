@@ -1,0 +1,66 @@
+{
+  "rules": [
+    {
+      "category": "Notifications",
+      "action": "archive",
+      "expire_after_weeks": 6,
+      "created": "2026-04-11",
+      "reason": "User confirmed: always auto-archive Notifications. Trash after 6 weeks."
+    },
+    {
+      "category": "Newsletters",
+      "action": "archive",
+      "expire_after_weeks": 12,
+      "created": "2026-04-11",
+      "reason": "User confirmed: always auto-archive Newsletters. Trash after 3 months."
+    },
+    {
+      "match": {
+        "sender": ["jobalerts-noreply@linkedin.com", "jobs-noreply@linkedin.com", "donotreply@email.careers.microsoft.com"]
+      },
+      "category": "Notifications",
+      "action": "archive",
+      "mark_read": true,
+      "expire_after_weeks": 6,
+      "created": "2026-04-11",
+      "reason": "LinkedIn/Microsoft job alerts are notifications, not applications. Auto-archive + mark read. Trash after 6 weeks."
+    },
+    {
+      "match": {
+        "sender": ["support@gearnews.enwild.com"]
+      },
+      "category": "Newsletters",
+      "action": "archive",
+      "mark_read": true,
+      "expire_after_weeks": 12,
+      "created": "2026-04-11",
+      "reason": "Enwild outdoor gear marketing emails — Newsletters, auto-archive + mark read. Trash after 3 months."
+    },
+    {
+      "match": {
+        "sender": ["newsletter@cryptojobslist.com"]
+      },
+      "action": "trash",
+      "created": "2026-04-11",
+      "reason": "User confirmed: always trash CryptoJobsList newsletters"
+    },
+    {
+      "match": {
+        "subject_contains": "Delivery Status Notification",
+        "sender": ["mailer-daemon@googlemail.com"]
+      },
+      "action": "trash",
+      "created": "2026-04-11",
+      "reason": "Wedding invitation bounce-backs to example.com — always trash"
+    },
+    {
+      "match": {
+        "sender_domain": ["clearpathlend.com"]
+      },
+      "action": "spam",
+      "flag_as_phishing": true,
+      "created": "2026-04-16",
+      "reason": "Phishing — unsolicited loan scam with urgency cues. Never interact with links. Always route to SPAM."
+    }
+  ]
+}
