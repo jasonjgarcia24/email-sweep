@@ -1,0 +1,19 @@
+{
+  "name": "jason-email-sweep",
+  "owner": {
+    "name": "Jason J. Garcia"
+  },
+  "metadata": {
+    "description": "A Claude Code plugin for a daily, compounding Gmail inbox sweep — auto-labels the obvious, batches the ambiguous by sender, trains itself as you go."
+  },
+  "plugins": [
+    {
+      "name": "email-sweep",
+      "source": {
+        "source": "github",
+        "repo": "jasonjgarcia24/email-sweep"
+      },
+      "description": "Daily Gmail triage as a Claude Code slash command. Classifies, labels, and archives via the Gmail MCP; logs every decision for future rule-mining."
+    }
+  ]
+}

@@ -6,10 +6,7 @@ You are running the user's daily `/email-sweep`. The goal: keep the inbox trendi
 
 ## Pre-flight
 
-1. **Load skill context**. Read the following files in parallel:
-   - `~/.claude/skills/email-sweep/SKILL.md` — classification heuristics, action safety rules
-   - `~/.claude/skills/email-sweep/labels.json` — canonical label taxonomy
-   - `~/.claude/skills/email-sweep/standing-rules.json` — active auto-apply rules
+1. **Load the skill**. Invoke the `email-sweep:email-sweep` skill — this loads the classification heuristics, action safety rules, label taxonomy (`labels.json`), and active standing rules (`standing-rules.json`) from the plugin's `skills/email-sweep/` directory.
 2. **Map labels → IDs**. Call `mcp__claude_ai_Gmail__list_labels` once; cache the name→ID map for the session.
 3. **Cross-check taxonomy**. If any label in `labels.json` is missing from Gmail, warn and offer `gmail-labels add "<name>"`. Do NOT proceed with sweeping until the taxonomy is intact.
 
@@ -87,7 +84,12 @@ Run `gmail-labels apply /tmp/email-sweep-YYYYMMDD.json` via Bash (the CLI is ins
 
 ## Step 6 — Log decisions
 
-For every thread (obvious OR resolved-ambiguous), append one JSON line to `training/decisions.jsonl` inside the email-sweep repo (resolve via `$EMAIL_SWEEP_HOME/training/decisions.jsonl` if set, else the current repo checkout):
+For every thread (obvious OR resolved-ambiguous), append one JSON line to the decisions log. Resolve the path in this order:
+
+1. `$EMAIL_SWEEP_HOME/decisions.jsonl` if `EMAIL_SWEEP_HOME` is set
+2. `~/.local/share/email-sweep/decisions.jsonl` (default)
+
+Create parent directories if missing. Example line:
 
 ```json
 {"timestamp": "2026-04-15T21:34:00-07:00", "thread_id": "...", "sender": "...", "subject": "...", "labels_applied": ["@Reference", "Life Admin/Finance"], "decision_source": "auto|human|rule"}

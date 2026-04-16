@@ -3,10 +3,6 @@ scripts/token.json
 credentials.json
 **/credentials.json
 
-# Training log — personal inbox history; keep local
-training/decisions.jsonl
-training/*.jsonl
-
 # Python
 __pycache__/
 *.py[cod]

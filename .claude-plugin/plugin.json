@@ -1,0 +1,13 @@
+{
+  "name": "email-sweep",
+  "description": "A Claude Code plugin for a daily, compounding Gmail inbox sweep — auto-labels the obvious, batches the ambiguous by sender, trains itself as you go.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jason J. Garcia"
+  },
+  "homepage": "https://github.com/jasonjgarcia24/email-sweep",
+  "repository": "https://github.com/jasonjgarcia24/email-sweep",
+  "license": "MIT",
+  "commands": "./commands",
+  "skills": "./skills"
+}
