@@ -36,7 +36,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TOOL_DIR = SCRIPT_DIR.parent
-LABELS_CONFIG = TOOL_DIR / "labels.json"
+LABELS_CONFIG = TOOL_DIR / "skills" / "email-sweep" / "labels.json"
 
 # Credentials: override with $EMAIL_SWEEP_CREDENTIALS, else ~/.config/email-sweep/credentials.json.
 # Token lives alongside this script.
