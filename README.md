@@ -30,6 +30,8 @@ One slash command drives the whole loop. It activates the `email-sweep` skill au
 
 ## Quick Start
 
+> **Before you start:** this plugin uses the Claude.ai **Gmail connector** (the `mcp__claude_ai_Gmail__*` tools). You need to be signed in to Claude Code with a claude.ai account (Pro/Max/Team) and have the Gmail connector enabled — see [Requirements](#requirements). Raw ANTHROPIC_API_KEY auth won't have these tools.
+
 <details>
 <summary><b>Claude Code — Marketplace install (recommended)</b></summary>
 
@@ -201,12 +203,13 @@ The shipped `standing-rules.json` reflects the author's inbox — delete the ent
 ## Requirements
 
 - **Claude Code CLI** — this is a Claude Code plugin; it only runs inside a Claude Code session.
-- **Gmail MCP** enabled in Claude Code. Provides the `mcp__claude_ai_Gmail__*` tools (search, read, label, unlabel, draft). Enable via Claude Code's MCP settings.
+- **Claude.ai account auth** — the plugin uses Claude.ai's built-in Gmail connector, not a self-hosted MCP server. You must be signed in to Claude Code via a claude.ai account (Pro, Max, or Team). Raw `ANTHROPIC_API_KEY` auth will not have access to the required tools.
+- **Gmail connector enabled** at [claude.ai/settings/connectors](https://claude.ai/settings/connectors). Provides the `mcp__claude_ai_Gmail__*` tools (search, read, label, unlabel, draft) that this plugin calls.
 - **Python 3.10+** with the Google API client libraries for `gmail-labels`:
   ```bash
   pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
   ```
-- **OAuth 2.0 client** (`credentials.json`) — the Gmail MCP can apply labels but not create or delete them, so initial taxonomy setup uses the REST API directly. See OAuth setup above.
+- **OAuth 2.0 client** (`credentials.json`) — the Gmail connector can apply labels but not create or delete them, so initial taxonomy setup uses the Gmail REST API directly. See OAuth setup above.
 - **`jq`** — optional. Only needed if you use the manual-install `settings.json` merge step.
 
 ---
