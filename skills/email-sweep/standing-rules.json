@@ -46,15 +46,6 @@
     },
     {
       "match": {
-        "subject_contains": "Delivery Status Notification",
-        "sender": ["mailer-daemon@googlemail.com"]
-      },
-      "action": "trash",
-      "created": "2026-04-11",
-      "reason": "Wedding invitation bounce-backs to example.com — always trash"
-    },
-    {
-      "match": {
         "sender_domain": ["clearpathlend.com"]
       },
       "action": "spam",
