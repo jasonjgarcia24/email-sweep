@@ -8,7 +8,11 @@ You are running the user's daily `/email-sweep`. The goal: keep the inbox trendi
 
 1. **Load the skill**. Invoke the `email-sweep:email-sweep` skill — this loads the classification heuristics, action safety rules, label taxonomy (`labels.json`), and active standing rules (`standing-rules.json`) from the plugin's `skills/email-sweep/` directory.
 2. **Map labels → IDs**. Call `mcp__claude_ai_Gmail__list_labels` once; cache the name→ID map for the session.
-3. **Cross-check taxonomy**. If any label in `labels.json` is missing from Gmail, warn and offer `gmail-labels add "<name>"`. Do NOT proceed with sweeping until the taxonomy is intact.
+3. **Verify both sides are authed to the same Gmail account.** The Gmail MCP and the `gmail-labels` CLI hold separate OAuth tokens — if one rotates or is authed against a different Google account, the sweep silently operates on the wrong mailbox. Run both checks before sweeping:
+   - **CLI side:** shell out to `gmail-labels whoami` and capture the printed address.
+   - **MCP side:** call `mcp__claude_ai_Gmail__search_threads` with `query: "from:me"`, `pageSize: 1`. Pass the returned `id` to `mcp__claude_ai_Gmail__get_thread` (`format: METADATA`) and read the `from` header of the first message — that's the MCP-authed account.
+   - Print both addresses side-by-side (`CLI: X | MCP: Y`). If they don't match, **abort the sweep** — tell the user to re-auth the side that's wrong (`gmail-labels auth` for CLI, or reconnect the Gmail MCP in Claude.ai settings) before retrying.
+4. **Cross-check taxonomy**. If any label in `labels.json` is missing from Gmail, warn and offer `gmail-labels add "<name>"`. Do NOT proceed with sweeping until the taxonomy is intact.
 
 ## Step 1 — Parse mode + fetch threads
 
@@ -31,6 +35,22 @@ If the first page returns 10 threads → paginate until exhausted, accumulating 
 - Default mode: if total threads > 25, note in the summary header — the daily habit slipped and full review is warranted.
 - `--all` mode: if total threads > 50, note in the summary header — backlog is real; plan to follow up with another `--all` run tomorrow.
 
+## Step 1b — Fetch stale @Action queue
+
+Independently of the inbox sweep, surface `@Action` threads that may have rotted. Step 1 catches NEW items; this catches OLD `@Action` items that never got resolved. Runs every sweep (default and `--all`).
+
+Call `mcp__claude_ai_Gmail__search_threads`:
+- `query`: `label:"@Action" older_than:7d`
+- `pageSize`: `10` (paginate as in Step 1)
+
+Cap at 25 stale threads per sweep — if more, note in summary and surface the oldest 25; the user can run a targeted queue-clearing pass separately.
+
+For each stale thread, pull `mcp__claude_ai_Gmail__get_thread` with `format: METADATA` to capture `from`, `subject`, and message age.
+
+**Caveat on age**: Gmail's `older_than:` filters by message date, not label-application date. A freshly-tagged old thread will appear here even if the user only decided `@Action` yesterday. That's acceptable for v1 — they'll just say "keep." If this becomes noisy, upgrade to a `decisions.jsonl`-backed lookup (latest log entry per `thread_id` whose `labels_applied` contains `@Action`, compute label-age from that timestamp).
+
+**Never auto-clear `@Action`.** This step only surfaces; the user always chooses the disposition (Step 4b).
+
 ## Step 2 — Classify
 
 For each thread, pull snippet via `mcp__claude_ai_Gmail__get_thread` with `format: MINIMAL`. Classify using the sender + subject + snippet. For each thread, decide:
@@ -48,6 +68,7 @@ Group ambiguous threads by sender before presenting (V6 sender-grouping from the
 ### Summary
 - Mode: [default | --all]
 - Threads fetched: N
+- Stale @Action queue: Q (threads >7d still tagged @Action)
 - Obvious auto: A
 - Ambiguous (flag for review): B
 - Threshold alarm: [yes/no — see Step 1 thresholds]
@@ -59,6 +80,11 @@ Group ambiguous threads by sender before presenting (V6 sender-grouping from the
 
 ### Ambiguous (review per sender)
 [Grouped by sender — ask per-sender if same treatment as last time or fresh ruling]
+
+### Stale @Action queue (review per thread)
+| # | Age | From | Subject |
+|---|-----|------|---------|
+[One row per stale thread, sorted oldest first]
 ```
 
 Wait for the user's confirmation / edits on the obvious batch. Default: they'll say "go" and it runs.
@@ -69,6 +95,19 @@ For each sender group:
 - Surface 1-2 representative threads (subject + snippet)
 - Ask: "Same treatment as [last time's label]?" if prior rulings exist in `decisions.jsonl`, else "How should I label this sender's threads today?"
 - Accept the answer, apply to all threads from that sender in the batch
+
+## Step 4b — Resolve stale @Action queue
+
+For each stale thread surfaced in Step 1b, present subject + age + snippet and ask for one of four dispositions:
+
+- **keep** — still actionable; label stays, no plan entry
+- **done** — action complete; add `{"add_labels": ["@Reference"], "remove_labels": ["@Action", "INBOX"]}` to the apply plan
+- **waiting** — sent something, waiting on reply; add `{"add_labels": ["@Waiting"], "remove_labels": ["@Action"]}` to the apply plan
+- **trash** — no longer relevant; confirm per the "Never trash without explicit confirmation" rule, then add `{"add_labels": ["TRASH"], "remove_labels": ["@Action", "INBOX"]}`
+
+Batch-accept patterns (e.g., "keep all") are fine if the user calls for them — single keystroke per thread preferred over re-prompting.
+
+Queue dispositions merge into the same apply plan built in Step 5.
 
 ## Step 5 — Apply
 
@@ -98,6 +137,7 @@ Create parent directories if missing. Example line:
 - `auto` — matched a clear sender/subject pattern but not an existing standing rule (candidate for future rule-mining)
 - `human` — resolved via ambiguous-review in step 4
 - `rule` — matched an existing entry in `standing-rules.json`
+- `queue` — resolved via stale @Action queue review in step 4b
 
 **Append only. Never rewrite.** One line per thread. Newline-delimited JSON.
 
@@ -107,7 +147,8 @@ Report:
 ```
 /email-sweep complete — YYYY-MM-DD
   Threads swept: N
-  Auto: A | Human: H | Rule: R
+  Auto: A | Human: H | Rule: R | Queue: Q
+  Stale @Action remaining (kept): K
   Errors: E
   Decisions logged: N
   Next: run `/email-sweep` again tomorrow EOD
