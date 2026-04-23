@@ -49,7 +49,7 @@ That wires up the `email-sweep` skill and the `/email-sweep:sweep` slash command
 
 to complete the first-run setup (CLI symlink, OAuth credentials + token, label taxonomy sync, permissions check, CLI ↔ MCP account match). `--init` is idempotent — it detects what's already in place and only fixes what's missing. See the **OAuth setup** section below for the one-time Google Cloud Console steps `--init` will walk you through.
 
-> **Why `/email-sweep:sweep` and not `/email-sweep`?** Claude Code namespaces plugin commands as `<plugin-name>:<command-name>` to avoid collisions. Plugin name here is `email-sweep`; command is `sweep`. Manual install (below) drops the namespace and lets you invoke it as `/email-sweep`.
+> **Two ways to invoke.** `/email-sweep:sweep` is the plugin-namespaced form (always available after install — Claude Code namespaces plugin commands as `<plugin-name>:<command-name>` to avoid collisions). `/email-sweep` is the short form — during `--init`, a user-level symlink is installed at `~/.claude/commands/email-sweep.md` → the plugin's `commands/sweep.md`, so both resolve to the same file with no drift. Use whichever reads better; if you skip that `--init` gate, only the namespaced form works.
 
 > **SSH errors?** The marketplace clones repos via SSH. If you don't have SSH keys set up on GitHub, either [add your SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account) or switch to HTTPS for fetches only:
 > ```bash

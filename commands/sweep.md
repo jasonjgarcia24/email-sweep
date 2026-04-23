@@ -197,16 +197,113 @@ At the end of a successful run, the user has:
 - A personalized `labels.json` / `standing-rules.json` if they chose to customize
 - The MCP-side and CLI-side auth matched to the same Gmail account
 
-## Opening message
+## Output format
 
-Announce up front, one line each:
+Every `--init` run produces three kinds of output: an opening banner once, a status line per gate as each one finishes, and a final report. Keep it tight — this is a short run, not a novel. Never dump raw Python tracebacks; translate errors into one-sentence plain English.
+
+### Opening banner
+
+Print once, at the very start:
 
 ```
 /email-sweep --init — first-run setup
-I'll check each piece and fix what's missing. One step (Google OAuth consent) needs your browser.
+Checking 12 gates. One step (Google OAuth consent) may need your browser.
+Legend: ✓ passed · → fixing · ⚠ needs you · ✗ blocking
 ```
 
-Then work through the gates in order. At each gate, print its label + outcome (`✓ already set`, `→ fixing`, or `⚠ needs your action`) so the user can follow along.
+### Per-gate status line
+
+One line per gate, printed as each one finishes. Standard form:
+
+```
+[N/11] <Gate name> — <symbol> <one-line outcome>
+```
+
+Examples (showing the variety of outcomes):
+
+```
+[1/12] Python + deps — ✓ Python 3.12.3, all imports present
+[2/12] CLI on PATH — ✓ ~/.local/bin/gmail-labels → $PLUGIN_ROOT/scripts/gmail-labels.py
+[4/12] Claude Code permissions — ✓ all required perms present
+[6/12] OAuth token — → fixing (opening browser for consent)
+[6/12] OAuth token — ✓ authenticated as jason.garcia24@gmail.com
+[7/12] Account match — ✓ CLI = MCP = jason.garcia24@gmail.com
+[9/12] Sync labels to Gmail — ✓ 16 labels (0 new, 16 existing)
+```
+
+If a gate does real work (Gate 3 jq merge, Gate 5 browser auth, Gate 8 sync), print a `→ fixing` line when starting and a final `✓` / `⚠` / `✗` line when done — so the user sees motion instead of a long pause.
+
+### Remediation block (when a gate is ⚠ or ✗)
+
+Follow the status line with an indented block. Three required fields: **What's wrong** (one sentence), **Next step** (numbered concrete actions), **Blocking** (`yes` or `no`).
+
+```
+[5/12] OAuth credentials — ⚠ needs you
+  What's wrong:  No OAuth client at ~/.config/email-sweep/credentials.json.
+  Next step (one-time, ~5 min):
+    1. console.cloud.google.com → create project → enable Gmail API.
+    2. OAuth consent screen → External → add yourself as a Test user.
+       Add scope: https://www.googleapis.com/auth/gmail.modify
+    3. Credentials → Create → OAuth client ID → Desktop app → download JSON.
+    4. Drop it in ~/Downloads and reply "done" — I'll move it into place.
+  Blocking: yes — gates 6-12 paused until resolved.
+```
+
+Rules:
+- **What's wrong:** plain English, one sentence. Never a stack trace.
+- **Next step:** ordered list of concrete actions (commands or click-paths). Each step should be independently runnable. If the fix is a single command, one step is fine.
+- **Blocking:** `yes` if the rest of init can't proceed (Gate 4 creds, Gate 5 token, Gate 6 account mismatch). `no` if it's optional (Gate 3 perms, Gate 10 rules).
+- For `✗` (hard fail), append one closing line: `Aborting init. Re-run /email-sweep:sweep --init after fixing.`
+
+### Final report
+
+One of three shapes depending on outcome.
+
+**Success — all 11 ✓:**
+
+```
+═══════════════════════════════════════════════════════════
+ /email-sweep --init — complete (YYYY-MM-DD)
+═══════════════════════════════════════════════════════════
+
+All 12 gates passed.
+
+Account:   <email> (CLI = MCP)
+Labels:    N synced (M new, K existing)
+Rules:     R loaded from standing-rules.json
+Log dir:   <path> (empty — seeded at first sweep)
+
+Next (after Gate 3 installed the short-form alias, either form works):
+  /email-sweep               daily — today's unreads
+  /email-sweep --all         weekly — full inbox catch-up
+```
+
+**Partial — at least one ⚠, no ✗:**
+
+```
+═══════════════════════════════════════════════════════════
+ /email-sweep --init — incomplete (YYYY-MM-DD)
+═══════════════════════════════════════════════════════════
+
+Passed:     [1] [2] [3] [6] [7] [8] [9] [10] [11] [12]
+Needs you:  [4] Claude Code permissions — jq merge not run
+            [5] OAuth credentials — drop file in ~/Downloads and reply "done"
+
+Re-run /email-sweep:sweep --init after resolving. It's idempotent — already-passed gates get confirmed quickly.
+```
+
+**Aborted — any ✗:**
+
+```
+═══════════════════════════════════════════════════════════
+ /email-sweep --init — aborted at gate [N] (YYYY-MM-DD)
+═══════════════════════════════════════════════════════════
+
+Blocking:       [N] <gate name> — <one-line reason>
+Passed so far:  [1] [2] ... [N-1]
+
+Fix the blocking gate (see remediation above) and re-run /email-sweep:sweep --init.
+```
 
 ## Finding plugin-root
 
@@ -241,7 +338,23 @@ Abort with a clear error if `$PLUGIN_ROOT/scripts/gmail-labels.py` doesn't exist
 - Verify: `gmail-labels --help` returns exit 0.
 - Verify `~/.local/bin` is on PATH (`echo "$PATH" | tr ':' '\n' | grep -q "$HOME/.local/bin"`). If not, tell the user to add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc` and open a fresh shell.
 
-## Gate 3 — Claude Code permissions
+## Gate 3 — Short-form slash command alias
+
+Enables bare `/email-sweep` invocation alongside the plugin-namespaced `/email-sweep:sweep`. Both resolve to the same file, so no drift.
+
+- Target: `~/.claude/commands/email-sweep.md`. Source: `$PLUGIN_ROOT/commands/sweep.md`.
+- If target exists AND is a symlink pointing at source: ✓ already set.
+- If target is missing:
+  ```bash
+  mkdir -p ~/.claude/commands
+  ln -sf "$PLUGIN_ROOT/commands/sweep.md" ~/.claude/commands/email-sweep.md
+  ```
+- If target exists but is a regular file OR a symlink pointing elsewhere: **stop and confirm before overwriting** — the user may have a custom command there. Print the conflict (what's at the path, what it points to) and ask `Overwrite? (y/N)`. Default no.
+- Verify after creation: `test -L ~/.claude/commands/email-sweep.md && readlink ~/.claude/commands/email-sweep.md` returns the source path.
+- This gate is non-blocking: if the user declines, `/email-sweep:sweep` still works — they just lose the short form. Record as `⚠ needs you` and continue.
+- Caveat to document: if the plugin is ever uninstalled, this symlink dangles. `/email-sweep` will error until removed. No auto-cleanup today.
+
+## Gate 4 — Claude Code permissions
 
 - Parse `~/.claude/settings.json` with `jq '.permissions.allow // []'`.
 - Required entries (read `$PLUGIN_ROOT/settings.fragment.json` for the authoritative list):
@@ -266,7 +379,7 @@ Abort with a clear error if `$PLUGIN_ROOT/scripts/gmail-labels.py` doesn't exist
 - **Never rewrite `settings.json` without an explicit "yes" from the user.** Modifying it silently inside a slash command is a trust violation.
 - Missing perms don't block Init Mode (the user can approve MCP calls interactively). Note what's missing and continue.
 
-## Gate 4 — OAuth credentials file
+## Gate 5 — OAuth credentials file
 
 Target path: `$EMAIL_SWEEP_CREDENTIALS` if set, else `~/.config/email-sweep/credentials.json`.
 
@@ -283,7 +396,7 @@ Target path: `$EMAIL_SWEEP_CREDENTIALS` if set, else `~/.config/email-sweep/cred
    - Wait for the user to say they've placed the file. Re-check the target path.
 3. Validate: the file must be a JSON object with a top-level key `installed` (desktop OAuth client shape). If it has `web` instead, the user created the wrong client type — walk them back to step 4 of the walkthrough.
 
-## Gate 5 — OAuth token
+## Gate 6 — OAuth token
 
 - Probe: `gmail-labels list` (exits 0 only if token is valid).
 - If it fails with an auth/credentials error (matches `not found` or `invalid_grant`), run `gmail-labels auth`.
@@ -291,7 +404,7 @@ Target path: `$EMAIL_SWEEP_CREDENTIALS` if set, else `~/.config/email-sweep/cred
   - **Fallback if the tool call hangs or the browser doesn't open:** tell the user to run `gmail-labels auth` in their own terminal and report back; once they say "done," re-probe.
 - Re-probe `gmail-labels list` after auth. Loop only once — if it still fails, surface the error and stop; don't retry blindly.
 
-## Gate 6 — MCP ↔ CLI account match
+## Gate 7 — MCP ↔ CLI account match
 
 Same dual-whoami check the daily pre-flight does:
 
@@ -303,62 +416,48 @@ Same dual-whoami check the daily pre-flight does:
   - MCP authed against the wrong account → reconnect the Gmail connector at [claude.ai/settings/connectors](https://claude.ai/settings/connectors).
   - Fix the mismatch, then re-run `/email-sweep --init`.
 
-## Gate 7 — Label taxonomy review (optional)
+## Gate 8 — Label taxonomy review (optional)
 
 - Read `$PLUGIN_ROOT/skills/email-sweep/labels.json` and list its contents.
 - Prompt: *"This is the canonical label taxonomy. Want to customize before syncing to Gmail? (y/N, default: keep as-is)"*
 - If yes: tell the user to edit `$PLUGIN_ROOT/skills/email-sweep/labels.json`, then say "done." Re-read and show the diff before moving on.
 - If no: continue.
 
-## Gate 8 — Sync labels to Gmail
+## Gate 9 — Sync labels to Gmail
 
 - Run `gmail-labels sync`. Capture output (lists created labels).
 - Verify: `mcp__claude_ai_Gmail__list_labels` → every name in `labels.json` should be present. If any are still missing, re-run sync once; if still missing, surface the Gmail API error.
 
-## Gate 9 — Decisions log directory
+## Gate 10 — Decisions log directory
 
 - If `$EMAIL_SWEEP_HOME` is set: `mkdir -p "$EMAIL_SWEEP_HOME"`.
 - Else: `mkdir -p ~/.local/share/email-sweep`.
 - Do **not** create `decisions.jsonl` — leave that for the first real sweep so we don't seed the training log with empty state.
 
-## Gate 10 — Standing rules review (optional)
+## Gate 11 — Standing rules review (optional)
 
 - Read `$PLUGIN_ROOT/skills/email-sweep/standing-rules.json` and show the entries.
 - Note: these reflect the plugin author's inbox and likely don't all apply to the user.
 - Prompt: *"These ship with the plugin. Prune now, or leave for later — the daily sweep will propose new rules from your decisions either way?"*
 - If prune: let the user edit and confirm. Don't block on this — default to "leave" if ambiguous.
 
-## Gate 11 — Final verification + report
+## Gate 12 — Final verification + report
 
 Dry-run the first two steps of the daily sweep to prove end-to-end wiring works:
 
 - `mcp__claude_ai_Gmail__search_threads` with `query: "in:inbox"`, `pageSize: 1` — proves MCP reads work.
 - `mcp__claude_ai_Gmail__list_labels` — proves taxonomy lookup works.
 
-Then print the completion block:
+On success, print `[12/12] Final verification — ✓ MCP read + label lookup ok`, then the **Final report** per `## Output format` above. Pick the success / partial / aborted shape based on how gates 1-11 turned out:
 
-```
-/email-sweep --init complete — YYYY-MM-DD
-  Python + deps:       ✓
-  CLI on PATH:         ✓  (→ $PLUGIN_ROOT/scripts/gmail-labels.py)
-  Permissions:         ✓ / ⚠ (list missing if any)
-  OAuth credentials:   ✓
-  OAuth token:         ✓
-  Account match:       CLI=<email> MCP=<email> ✓
-  Label taxonomy:      N labels synced (M new, K existing)
-  Standing rules:      N rules loaded from standing-rules.json
-  Decisions log dir:   <path>
-
-  Next: run /email-sweep at end of day to start the daily habit.
-        Run /email-sweep --all weekly to catch up on anything that slipped.
-```
-
-If any gate ended in `⚠`, list the manual follow-ups the user still needs to do (most commonly: add `~/.local/bin` to PATH, run the jq perms merge in their terminal).
+- Any `✗` → aborted shape (init stopped early at that gate).
+- At least one `⚠`, no `✗` → partial shape (list every `⚠` in the "Needs you" block with its one-line remediation).
+- All `✓` → success shape.
 
 ## Init Mode safety rules
 
 - **Never** auto-mutate `~/.claude/settings.json` — it's the user's config.
 - **Never** run `pip install` yourself — print the command and wait.
 - **Never** download or commit OAuth credentials to the repo.
-- **Never** proceed past Gate 6 (account match) on a mismatch — silent cross-account activity is the worst failure mode this plugin has.
+- **Never** proceed past Gate 7 (account match) on a mismatch — silent cross-account activity is the worst failure mode this plugin has.
 - Each gate is independent: if Gate N fails non-fatally, note it and continue; report at the end. If a gate is fatal (deps missing, creds absent, account mismatch), stop and tell the user exactly what to do next.
