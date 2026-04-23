@@ -52,6 +52,40 @@
       "flag_as_phishing": true,
       "created": "2026-04-16",
       "reason": "Phishing — unsolicited loan scam with urgency cues. Never interact with links. Always route to SPAM."
+    },
+    {
+      "match": {
+        "sender": ["messages-noreply@linkedin.com"]
+      },
+      "category": "Notifications",
+      "action": "archive",
+      "mark_read": true,
+      "expire_after_weeks": 6,
+      "created": "2026-04-23",
+      "reason": "LinkedIn aggregated hiring/network digests — Notifications only (no Job Search/Recruiter overlay). Archive + mark read. Trash after 6 weeks."
+    },
+    {
+      "match": {
+        "sender": ["hit-reply@linkedin.com"]
+      },
+      "category": "Job Search/Closed",
+      "secondary_labels": ["@Reference"],
+      "action": "archive",
+      "mark_read": true,
+      "expire_after_weeks": 12,
+      "created": "2026-04-23",
+      "reason": "LinkedIn InMail 'Message replied' notifications indicate a closed exchange. Archive as Job Search/Closed + @Reference. Trash after 3 months."
+    },
+    {
+      "match": {
+        "sender": ["no-reply@booksy.com"]
+      },
+      "category": "@Action",
+      "secondary_labels": ["Notifications"],
+      "action": "keep_in_inbox",
+      "mark_read": false,
+      "created": "2026-04-23",
+      "reason": "Appointment reminders — keep visible in inbox and unread until the appointment passes. After the appointment date, classifier can archive + mark read."
     }
   ]
 }
