@@ -8,11 +8,13 @@
     "Job Search/Application",
     "Job Search/Interview",
     "Job Search/Offer",
+    "Job Search/Closed",
     "Life Admin",
     "Life Admin/Finance",
     "Life Admin/Benefits",
     "Life Admin/Wedding",
     "Newsletters",
-    "Notifications"
+    "Notifications",
+    "Social"
   ]
 }
