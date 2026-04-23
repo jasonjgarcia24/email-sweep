@@ -6,11 +6,11 @@
 
 ```mermaid
 flowchart TB
-    F["**FETCH**: today's Gmail unreads"]
-    C["**CLASSIFY**: obvious vs ambiguous"]
-    R["**RESOLVE**: human rules by sender"]
-    A["**APPLY**: labels + archive"]
-    T["**TRAIN**: decision log (.jsonl)"]
+    F["FETCH: today's Gmail unreads"]
+    C["CLASSIFY: obvious vs ambiguous"]
+    R["RESOLVE: human rules by sender"]
+    A["APPLY: labels + archive"]
+    T["TRAIN: decision log (.jsonl)"]
     F ==> C ==> R ==> A ==> T
     T -. "tomorrow's obvious set grows" .-> C
 ```
@@ -23,8 +23,9 @@ One slash command drives the whole loop. It activates the `email-sweep` skill au
 
 | Command | What It Does | When To Run |
 |---------|--------------|-------------|
-| `/email-sweep` | Classify today's unread threads, confirm obvious batch, walk ambiguous by sender, apply labels, log decisions | Daily, end-of-day — ~60 seconds |
-| `/email-sweep --all` | Full inbox sweep (read + unread, any age) instead of today's unreads only | Weekly catch-up, or after skipped days |
+| `/email-sweep:sweep --init` | First-run setup — verifies CLI on PATH, Python deps, Claude Code permissions, OAuth credentials + token, syncs the label taxonomy to Gmail, cross-checks CLI ↔ MCP auth. Idempotent — safe to re-run. | Once after install, and any time setup drifts (new machine, revoked token, edited taxonomy) |
+| `/email-sweep:sweep` | Classify today's unread threads, confirm obvious batch, walk ambiguous by sender, apply labels, log decisions | Daily, end-of-day — ~60 seconds |
+| `/email-sweep:sweep --all` | Full inbox sweep (read + unread, any age) instead of today's unreads only | Weekly catch-up, or after skipped days |
 
 ---
 
@@ -40,7 +41,15 @@ One slash command drives the whole loop. It activates the `email-sweep` skill au
 /plugin install email-sweep@jason-email-sweep
 ```
 
-That wires up the `email-sweep` skill and the `/email-sweep` slash command. You still need to complete the **OAuth setup** below once so the label-management CLI can create canonical labels in your Gmail account.
+That wires up the `email-sweep` skill and the `/email-sweep:sweep` slash command. Then run:
+
+```
+/email-sweep:sweep --init
+```
+
+to complete the first-run setup (CLI symlink, OAuth credentials + token, label taxonomy sync, permissions check, CLI ↔ MCP account match). `--init` is idempotent — it detects what's already in place and only fixes what's missing. See the **OAuth setup** section below for the one-time Google Cloud Console steps `--init` will walk you through.
+
+> **Why `/email-sweep:sweep` and not `/email-sweep`?** Claude Code namespaces plugin commands as `<plugin-name>:<command-name>` to avoid collisions. Plugin name here is `email-sweep`; command is `sweep`. Manual install (below) drops the namespace and lets you invoke it as `/email-sweep`.
 
 > **SSH errors?** The marketplace clones repos via SSH. If you don't have SSH keys set up on GitHub, either [add your SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account) or switch to HTTPS for fetches only:
 > ```bash
@@ -78,7 +87,7 @@ ln -sf "$PWD/skills/email-sweep/standing-rules.json" ~/.claude/skills/email-swee
 
 # Slash command
 mkdir -p ~/.claude/commands
-ln -sf "$PWD/commands/email-sweep.md" ~/.claude/commands/email-sweep.md
+ln -sf "$PWD/commands/sweep.md" ~/.claude/commands/email-sweep.md
 
 # Label-management CLI on PATH
 mkdir -p ~/.local/bin
@@ -227,7 +236,7 @@ email-sweep/
 │       ├── labels.json       # canonical label taxonomy
 │       └── standing-rules.json # active auto-apply rules (personalize!)
 ├── commands/
-│   └── email-sweep.md        # the /email-sweep slash command — the daily loop
+│   └── sweep.md              # the /email-sweep:sweep slash command — the daily loop
 ├── scripts/
 │   └── gmail-labels.py       # Gmail label create/delete CLI (fills the gap left by Gmail MCP)
 ├── docs/
@@ -247,7 +256,11 @@ Directional choices from the design doc, kept for transparency:
 - **No cron / no background daemon.** The slash command is the training signal — removing the human forecloses the compounding loop. Adding a scheduler later is a choice; starting with one forecloses the option.
 - **No @Waiting / @Action SLA automation.** Workflow (deferral, reminders) is premature while the real pain is classification volume. Revisit once the backlog is stable for a month.
 - **No unsubscribe automation.** Adjacent problem, different tool. The sweep's job is label + archive, not managing sender relationships.
-- **No multi-account support.** Single Gmail only. Generalize later if ever needed.
+- **No multi-account support.** Single Gmail only. The plugin can't sweep a work and a personal inbox side-by-side today. Blockers if you want to generalize:
+  - `scripts/gmail-labels.py` pins `TOKEN_FILE` to `<script_dir>/token.json` with no env override — one account's OAuth token at a time. (`$EMAIL_SWEEP_CREDENTIALS` already overrides the OAuth *client*, which is fine; the token is the per-account piece.)
+  - The Claude.ai Gmail connector is a single bound account. Gate 6's CLI-vs-MCP account-match check is the whole reason cross-account sweeps stay safe — multi-account on the CLI alone loses that safety net.
+  - `standing-rules.json` and `decisions.jsonl` are shared single-tenant state with no account field. Labels (`labels.json`) are fine to reuse across accounts; rules and decisions are not.
+  - A real fix looks like `--account <alias>` mapping to a `{token, decisions, rules}` triplet, paired with whatever dual-connector support Claude.ai exposes.
 - **Week-2 rule-miner is manual for now.** Rule proposals happen in-session at the end of a sweep (`"You labeled 4 noreply@calendly.com threads as Notifications today — add standing rule?"`). Automated pattern detection is possible but not built.
 
 See [`docs/ideas/email-sweep.md`](docs/ideas/email-sweep.md) for the full design doc.

@@ -6,6 +6,7 @@ left by the Gmail MCP (which can apply labels but not create/delete them).
 
 Usage:
     gmail-labels.py auth                        # One-time OAuth flow for Gmail scope
+    gmail-labels.py whoami                      # Print the authenticated Gmail address
     gmail-labels.py list                        # List all user-defined labels
     gmail-labels.py sync                        # Create missing / optionally remove extra labels
     gmail-labels.py add "Label Name"            # Create a single label
@@ -115,6 +116,13 @@ def do_auth(_args):
     creds = flow.run_local_server(port=0)
     TOKEN_FILE.write_text(creds.to_json())
     print(f"Authentication successful. Token saved to {TOKEN_FILE}")
+
+
+def do_whoami(_args):
+    """Print the Gmail address the CLI is authenticated against."""
+    service = get_gmail_service()
+    profile = service.users().getProfile(userId="me").execute()
+    print(profile["emailAddress"])
 
 
 def do_list(_args):
@@ -343,6 +351,9 @@ def main():
     # auth
     sub.add_parser("auth", help="Run OAuth2 authorization flow for Gmail")
 
+    # whoami
+    sub.add_parser("whoami", help="Print the authenticated Gmail address")
+
     # list
     sub.add_parser("list", help="List all user-defined labels")
 
@@ -369,6 +380,7 @@ def main():
 
     dispatch = {
         "auth": do_auth,
+        "whoami": do_whoami,
         "list": do_list,
         "sync": do_sync,
         "add": do_add,
