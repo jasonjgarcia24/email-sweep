@@ -4,15 +4,15 @@
 
 `/email-sweep` runs an end-of-day pass over your Gmail inbox: it auto-labels the obvious threads, batches the ambiguous ones by sender for quick human rulings, and logs every decision to a training log that seeds tomorrow's auto-rules. The system is designed to compound — today's "ambiguous" set shrinks every week as yesterday's rulings become standing rules.
 
-```
-   FETCH          CLASSIFY         RESOLVE          APPLY           TRAIN
- ┌───────┐      ┌────────┐      ┌────────┐      ┌────────┐      ┌────────┐
- │ Gmail │ ───▶ │Obvious │ ───▶ │ Human  │ ───▶ │ Labels │ ───▶ │Decision│
- │unreads│      │   vs   │      │ rules  │      │   +    │      │  log   │
- │today  │      │ambiguous│      │by-sender│     │archive │      │ .jsonl │
- └───────┘      └────────┘      └────────┘      └────────┘      └────────┘
-                                                                      │
-                                      ◀─ tomorrow's obvious set grows ─┘
+```mermaid
+flowchart TB
+    F["**FETCH**: today's Gmail unreads"]
+    C["**CLASSIFY**: obvious vs ambiguous"]
+    R["**RESOLVE**: human rules by sender"]
+    A["**APPLY**: labels + archive"]
+    T["**TRAIN**: decision log (.jsonl)"]
+    F ==> C ==> R ==> A ==> T
+    T -. "tomorrow's obvious set grows" .-> C
 ```
 
 ---
