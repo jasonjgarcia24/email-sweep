@@ -26,6 +26,7 @@ One slash command drives the whole loop. It activates the `email-sweep` skill au
 | `/email-sweep:sweep --init` | First-run setup — verifies CLI on PATH, Python deps, Claude Code permissions, OAuth credentials + token, syncs the label taxonomy to Gmail, cross-checks CLI ↔ MCP auth. Idempotent — safe to re-run. | Once after install, and any time setup drifts (new machine, revoked token, edited taxonomy) |
 | `/email-sweep:sweep` | Classify today's unread threads, confirm obvious batch, walk ambiguous by sender, apply labels, log decisions | Daily, end-of-day — ~60 seconds |
 | `/email-sweep:sweep --all` | Full inbox sweep (read + unread, any age) instead of today's unreads only | Weekly catch-up, or after skipped days |
+| `/email-sweep:sweep --remove` | Cleanup pass for `--init`. Removes the user-level shims (CLI symlink, command alias). Leaves OAuth credentials, decisions log, settings.json permissions, and synced Gmail labels untouched (with printed manual-cleanup guidance). | Before `/plugin uninstall`, or to undo a partial `--init` |
 
 ---
 
@@ -39,15 +40,21 @@ One slash command drives the whole loop. It activates the `email-sweep` skill au
 ```
 /plugin marketplace add jasonjgarcia24/email-sweep
 /plugin install email-sweep@jason-email-sweep
-```
-
-That wires up the `email-sweep` skill and the `/email-sweep:sweep` slash command. Then run:
-
-```
+/reload-plugins
 /email-sweep:sweep --init
 ```
 
-to complete the first-run setup (CLI symlink, OAuth credentials + token, label taxonomy sync, permissions check, CLI ↔ MCP account match). `--init` is idempotent — it detects what's already in place and only fixes what's missing. See the **OAuth setup** section below for the one-time Google Cloud Console steps `--init` will walk you through.
+The first two add the marketplace and install the plugin; the third reloads the current session so `/email-sweep:sweep` is callable without restarting Claude Code; the fourth runs first-run setup (CLI symlink, OAuth credentials + token, label taxonomy sync, permissions check, CLI ↔ MCP account match). `--init` is idempotent — it detects what's already in place and only fixes what's missing. See the **OAuth setup** section below for the one-time Google Cloud Console steps `--init` will walk you through.
+
+To pull a newer version later: **uninstall first then reinstall** (Claude Code's `/plugin install` skips already-installed plugins, so a vanilla rerun won't pick up upstream changes):
+
+```
+/plugin marketplace update jason-email-sweep
+/plugin uninstall email-sweep@jason-email-sweep
+/plugin install email-sweep@jason-email-sweep
+/reload-plugins
+/email-sweep:sweep --init
+```
 
 > **Two ways to invoke.** `/email-sweep:sweep` is the plugin-namespaced form (always available after install — Claude Code namespaces plugin commands as `<plugin-name>:<command-name>` to avoid collisions). `/email-sweep` is the short form — during `--init`, a user-level symlink is installed at `~/.claude/commands/email-sweep.md` → the plugin's `commands/sweep.md`, so both resolve to the same file with no drift. Use whichever reads better; if you skip that `--init` gate, only the namespaced form works.
 
@@ -55,6 +62,39 @@ to complete the first-run setup (CLI symlink, OAuth credentials + token, label t
 > ```bash
 > git config --global url."https://github.com/".insteadOf "git@github.com:"
 > ```
+
+</details>
+
+<details>
+<summary><b>Uninstall</b></summary>
+
+Three steps. The first cleans up the user-level shims `--init` created; the next two remove the plugin and marketplace.
+
+```
+/email-sweep:sweep --remove
+/plugin uninstall email-sweep@jason-email-sweep
+/plugin marketplace remove jason-email-sweep
+```
+
+**`--remove` removes** (only if they exist and point at email-sweep paths):
+
+- `~/.local/bin/gmail-labels` symlink (the CLI on PATH)
+- `~/.claude/commands/email-sweep.md` symlink (the short-form `/email-sweep` alias)
+
+**`--remove` does NOT touch** (manage these yourself if you want full cleanup):
+
+- `~/.config/email-sweep/credentials.json` — OAuth client (sensitive; keeping it means no new Cloud Console setup if you reinstall)
+- `~/.local/share/email-sweep/decisions.jsonl` — training log (deleting loses your standing-rule history)
+- `~/.claude/settings.json` — has email-sweep permissions from `--init` Gate 4
+- Your Gmail labels — the taxonomy synced via `gmail-labels sync` stays in your inbox
+
+For full cleanup, manually:
+
+```bash
+rm -rf ~/.config/email-sweep ~/.local/share/email-sweep
+# Edit ~/.claude/settings.json to remove the email-sweep permissions block (back up first)
+# Delete unwanted labels via Gmail Settings → Labels
+```
 
 </details>
 

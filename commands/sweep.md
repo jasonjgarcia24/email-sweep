@@ -1,5 +1,5 @@
 ---
-description: Daily end-of-day Gmail inbox sweep — auto-label the obvious, flag the rest for review, log decisions for future automation. Use `--init` for first-run setup (OAuth, CLI, label taxonomy).
+description: Daily end-of-day Gmail inbox sweep — auto-label the obvious, flag the rest for review, log decisions for future automation. Use `--init` for first-run setup (OAuth, CLI, label taxonomy) and `--remove` to clean up the shims `--init` created.
 ---
 
 You are running the user's `/email-sweep`. Behavior depends on the flag:
@@ -7,6 +7,7 @@ You are running the user's `/email-sweep`. Behavior depends on the flag:
 - **No flag**: daily end-of-day sweep. Classify today's unreads, confirm obvious batch, walk ambiguous by sender, apply labels, log decisions. Target: keep the inbox trending toward zero as a habit.
 - **`--all`**: full inbox sweep (read + unread, any age) — weekly catch-up.
 - **`--init`**: first-run setup. Detect missing pieces (CLI on PATH, OAuth credentials, token, label taxonomy, permissions) and fix them or walk the user through fixing them. Idempotent — safe to re-run.
+- **`--remove`**: cleanup. Remove the user-level shims that `--init` created (CLI symlink, command symlink). Never auto-touches sensitive state — OAuth credentials, decisions log, settings.json permissions, and synced Gmail labels stay put with printed manual-cleanup guidance.
 
 ## Step 0 — Parse flag and dispatch
 
@@ -15,10 +16,11 @@ Inspect `$ARGUMENTS` (or the user's invocation text):
 | Flag | Action |
 |------|--------|
 | `--init` | **Skip the daily-sweep pre-flight and Steps 1-7.** Jump to the **Init Mode** section at the bottom of this file. Do not sweep the inbox. |
+| `--remove` | **Skip the daily-sweep pre-flight and Steps 1-7.** Jump to the **Remove Mode** section at the bottom of this file. Do not sweep the inbox. |
 | `--all` | Proceed to Pre-flight, then Steps 1-7 with the `--all` query variant. |
 | (none) | Proceed to Pre-flight, then Steps 1-7 with the default query. |
 
-If `--init` was passed, everything below (Pre-flight through Step 7) does **not** apply this run — only the Init Mode section does.
+If `--init` or `--remove` was passed, everything below (Pre-flight through Step 7) does **not** apply this run — only the corresponding mode section does. If both flags appear, prefer `--remove` (cleanup wins).
 
 ## Pre-flight
 
@@ -461,3 +463,86 @@ On success, print `[12/12] Final verification — ✓ MCP read + label lookup ok
 - **Never** download or commit OAuth credentials to the repo.
 - **Never** proceed past Gate 7 (account match) on a mismatch — silent cross-account activity is the worst failure mode this plugin has.
 - Each gate is independent: if Gate N fails non-fatally, note it and continue; report at the end. If a gate is fatal (deps missing, creds absent, account mismatch), stop and tell the user exactly what to do next.
+
+---
+
+# Remove Mode (`--remove`)
+
+Cleanup pass for `--init`. Removes the user-level shims that `--init` Gates 2 and 3 create (the `gmail-labels` CLI symlink and the short-form command alias). **Does not sweep the inbox. Never auto-touches sensitive state** — OAuth credentials, decisions log, settings.json permissions, and synced Gmail labels stay put with printed manual-cleanup guidance.
+
+At the end of a successful run, the user has:
+
+- `~/.local/bin/gmail-labels` symlink removed (only if it points at email-sweep)
+- `~/.claude/commands/email-sweep.md` symlink removed (only if it points at email-sweep) — short-form `/email-sweep` invocation goes away; `/email-sweep:sweep` (namespaced) still works until `/plugin uninstall`
+- A printed checklist for what to do about credentials, decisions log, settings permissions, and Gmail labels — left alone by default
+
+This command does NOT actually invoke `/plugin uninstall` itself — that's a Claude Code slash command, not a Bash command. Cleanup mode only handles the file-system shim removal; full plugin teardown requires the two slash commands at the end.
+
+## Implementation
+
+Run the following Bash sequence:
+
+```bash
+removed=0
+foreign=0
+not_symlink=0
+absent=0
+
+remove_symlink() {
+  local dst="$1"
+  local label="$2"
+  if [ -L "$dst" ]; then
+    local target=$(readlink "$dst")
+    if echo "$target" | grep -qE '(email-sweep|jason-email-sweep)'; then
+      rm "$dst"
+      echo "  ✓ removed: $label"
+      removed=$((removed+1))
+    else
+      echo "  ⚠ kept: $label — symlink points elsewhere ($target); not touching"
+      foreign=$((foreign+1))
+    fi
+  elif [ -e "$dst" ]; then
+    echo "  ⚠ kept: $label — exists but is not a symlink (real file); not touching"
+    not_symlink=$((not_symlink+1))
+  else
+    absent=$((absent+1))
+  fi
+}
+
+echo "Symlinks:"
+remove_symlink "$HOME/.local/bin/gmail-labels" "~/.local/bin/gmail-labels"
+remove_symlink "$HOME/.claude/commands/email-sweep.md" "~/.claude/commands/email-sweep.md"
+
+echo ""
+echo "email-sweep --remove complete — $removed removed, $absent already absent, $foreign kept (foreign), $not_symlink kept (not a symlink)."
+echo ""
+echo "Items NOT touched (manage them yourself if you want full cleanup):"
+echo ""
+echo "  ~/.config/email-sweep/credentials.json   ← OAuth client (sensitive — keeping it means no new Cloud Console setup if you reinstall)"
+echo "  ~/.local/share/email-sweep/decisions.jsonl   ← Training log (deleting loses your standing-rule history)"
+echo "  ~/.claude/settings.json                  ← Has email-sweep permission entries from --init Gate 4"
+echo "  Your Gmail labels                         ← The taxonomy synced via gmail-labels sync stays in your inbox"
+echo ""
+echo "If you want full cleanup, manually:"
+echo "  rm -rf ~/.config/email-sweep ~/.local/share/email-sweep"
+echo "  Edit ~/.claude/settings.json to remove the email-sweep permissions block (back up first: cp ~/.claude/settings.json ~/.claude/settings.json.bak)"
+echo "  Delete unwanted labels via Gmail Settings → Labels"
+echo ""
+echo "To uninstall the plugin itself:"
+echo ""
+echo "  /plugin uninstall email-sweep@jason-email-sweep"
+echo "  /plugin marketplace remove jason-email-sweep"
+echo ""
+echo "(Skipping those keeps the plugin installed — symlinks can be recreated with /email-sweep:sweep --init.)"
+```
+
+Report the command output verbatim.
+
+## Remove Mode safety rules
+
+- **Never** auto-edit `~/.claude/settings.json` — it's the user's config; print remediation instead.
+- **Never** auto-delete OAuth credentials or tokens (`~/.config/email-sweep/credentials.json`, `<plugin-root>/scripts/token.json`) — print warnings + manual `rm` commands.
+- **Never** auto-delete `decisions.jsonl` — it's training data; the user decides whether to keep their rule-mining history.
+- **Never** auto-delete labels from Gmail — those are user data created in their inbox.
+- Only remove symlinks that point at email-sweep paths — leave foreign symlinks alone.
+- **Never** auto-invoke `/plugin uninstall` — print the command and let the user decide.
