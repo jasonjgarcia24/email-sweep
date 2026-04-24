@@ -1,6 +1,6 @@
 ---
 name: email-sweep
-description: Gmail triage and organization skill — classifies, labels, archives, and manages email using the Gmail MCP and a GTD-inspired label taxonomy.
+description: Gmail triage and organization skill — classifies, labels, archives, and manages email using the Gmail MCP and a GTD-inspired label taxonomy. Use when the user asks to triage their inbox, classify emails, label or archive threads, check for follow-ups, clean up Gmail, run an end-of-day sweep, or perform a weekly inbox catch-up. Primary invocation is `/email-sweep:sweep`, but the skill also matches natural-language asks about inbox state.
 ---
 
 # email-sweep

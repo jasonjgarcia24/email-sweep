@@ -1,5 +1,5 @@
 ---
-description: Daily end-of-day Gmail inbox sweep — auto-label the obvious, flag the rest for review, log decisions for future automation. For first-run setup (OAuth, CLI, label taxonomy) or cleanup, see `/email-sweep:init` and `/email-sweep:init --remove`.
+description: Daily end-of-day Gmail inbox sweep — auto-label the obvious, flag the rest for review, log decisions for future automation. Use when the user asks to sweep their inbox, run the daily triage, do a weekly catch-up on unread mail, or clean up Gmail. Add `--all` for a full read+unread catch-up pass. For first-run setup (OAuth, CLI, label taxonomy) or cleanup, see `/email-sweep:init` and `/email-sweep:init --remove`.
 ---
 
 You are running the user's `/email-sweep`. Behavior depends on the flag:
