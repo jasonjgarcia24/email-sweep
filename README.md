@@ -17,16 +17,16 @@ flowchart TB
 
 ---
 
-## Command
+## Commands
 
-One slash command drives the whole loop. It activates the `email-sweep` skill automatically.
+Two slash commands. `/email-sweep:sweep` drives the daily loop; `/email-sweep:init` handles lifecycle (setup + cleanup).
 
 | Command | What It Does | When To Run |
 |---------|--------------|-------------|
-| `/email-sweep:sweep --init` | First-run setup — verifies CLI on PATH, Python deps, Claude Code permissions, OAuth credentials + token, syncs the label taxonomy to Gmail, cross-checks CLI ↔ MCP auth. Idempotent — safe to re-run. | Once after install, and any time setup drifts (new machine, revoked token, edited taxonomy) |
+| `/email-sweep:init` | First-run setup — verifies CLI on PATH, Python deps, Claude Code permissions, OAuth credentials + token, syncs the label taxonomy to Gmail, cross-checks CLI ↔ MCP auth (12 gates). Idempotent — safe to re-run. | Once after install, and any time setup drifts (new machine, revoked token, edited taxonomy) |
 | `/email-sweep:sweep` | Classify today's unread threads, confirm obvious batch, walk ambiguous by sender, apply labels, log decisions | Daily, end-of-day — ~60 seconds |
 | `/email-sweep:sweep --all` | Full inbox sweep (read + unread, any age) instead of today's unreads only | Weekly catch-up, or after skipped days |
-| `/email-sweep:sweep --remove` | Cleanup pass for `--init`. Removes the user-level shims (CLI symlink, command alias). Leaves OAuth credentials, decisions log, settings.json permissions, and synced Gmail labels untouched (with printed manual-cleanup guidance). | Before `/plugin uninstall`, or to undo a partial `--init` |
+| `/email-sweep:init --remove` | Cleanup pass for setup. Removes the user-level shims (CLI symlink, command alias). Leaves OAuth credentials, decisions log, settings.json permissions, and synced Gmail labels untouched (with printed manual-cleanup guidance). | Before `/plugin uninstall`, or to undo a partial setup |
 
 ---
 
@@ -41,10 +41,10 @@ One slash command drives the whole loop. It activates the `email-sweep` skill au
 /plugin marketplace add jasonjgarcia24/email-sweep
 /plugin install email-sweep@jason-email-sweep
 /reload-plugins
-/email-sweep:sweep --init
+/email-sweep:init
 ```
 
-The first two add the marketplace and install the plugin; the third reloads the current session so `/email-sweep:sweep` is callable without restarting Claude Code; the fourth runs first-run setup (CLI symlink, OAuth credentials + token, label taxonomy sync, permissions check, CLI ↔ MCP account match). `--init` is idempotent — it detects what's already in place and only fixes what's missing. See the **OAuth setup** section below for the one-time Google Cloud Console steps `--init` will walk you through.
+The first two add the marketplace and install the plugin; the third reloads the current session so the new commands are callable without restarting Claude Code; the fourth runs first-run setup (CLI symlink, OAuth credentials + token, label taxonomy sync, permissions check, CLI ↔ MCP account match). `/email-sweep:init` is idempotent — it detects what's already in place and only fixes what's missing. See the **OAuth setup** section below for the one-time Google Cloud Console steps init will walk you through.
 
 To pull a newer version later: **uninstall first then reinstall** (Claude Code's `/plugin install` skips already-installed plugins, so a vanilla rerun won't pick up upstream changes):
 
@@ -53,10 +53,10 @@ To pull a newer version later: **uninstall first then reinstall** (Claude Code's
 /plugin uninstall email-sweep@jason-email-sweep
 /plugin install email-sweep@jason-email-sweep
 /reload-plugins
-/email-sweep:sweep --init
+/email-sweep:init
 ```
 
-> **Two ways to invoke.** `/email-sweep:sweep` is the plugin-namespaced form (always available after install — Claude Code namespaces plugin commands as `<plugin-name>:<command-name>` to avoid collisions). `/email-sweep` is the short form — during `--init`, a user-level symlink is installed at `~/.claude/commands/email-sweep.md` → the plugin's `commands/sweep.md`, so both resolve to the same file with no drift. Use whichever reads better; if you skip that `--init` gate, only the namespaced form works.
+> **Two ways to invoke the daily sweep.** `/email-sweep:sweep` is the plugin-namespaced form (always available after install — Claude Code namespaces plugin commands as `<plugin-name>:<command-name>` to avoid collisions). `/email-sweep` is the short form — during `/email-sweep:init`, a user-level symlink is installed at `~/.claude/commands/email-sweep.md` → the plugin's `commands/sweep.md`, so both resolve to the same file with no drift. (Init itself stays namespaced — `/email-sweep:init` only — because Claude Code has a built-in `/init` command for CLAUDE.md initialization that the short form would collide with.)
 
 > **SSH errors?** The marketplace clones repos via SSH. If you don't have SSH keys set up on GitHub, either [add your SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account) or switch to HTTPS for fetches only:
 > ```bash
@@ -68,10 +68,10 @@ To pull a newer version later: **uninstall first then reinstall** (Claude Code's
 <details>
 <summary><b>Uninstall</b></summary>
 
-Three steps. The first cleans up the user-level shims `--init` created; the next two remove the plugin and marketplace.
+Three steps. The first cleans up the user-level shims init created; the next two remove the plugin and marketplace.
 
 ```
-/email-sweep:sweep --remove
+/email-sweep:init --remove
 /plugin uninstall email-sweep@jason-email-sweep
 /plugin marketplace remove jason-email-sweep
 ```
